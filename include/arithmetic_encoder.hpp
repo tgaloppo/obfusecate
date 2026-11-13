@@ -1,3 +1,12 @@
+// ==============================================================================
+// ObFUSEcate
+// arithmetic_encoder.hpp
+// 
+// Author: Travis J. Galoppo (tgaloppo@gmail.com)
+// Description: Arithmetic encoder using 32 bit distribution boundaries
+// 
+// SPDX-License-Identifier: MIT
+// ==============================================================================
 #pragma once
 
 #include <cstdint>
@@ -6,10 +15,10 @@
 namespace compression
 {
 
-class arithmetic_coder
+class arithmetic_encoder
 {
 public:
-    arithmetic_coder(bitstream::writer& output_stream, const symbol_frequency& frequency_table)
+    arithmetic_encoder(bitstream::writer& output_stream, const symbol_frequency& frequency_table)
         : mLow(0), mHigh(0xFFFFFFFF), mUnderflow(0), mOutStream(output_stream), mFreqTable(frequency_table)
     {}
 

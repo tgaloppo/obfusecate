@@ -1,56 +1,27 @@
+// ==============================================================================
+// ObFUSEcate
+// chacha20.cpp
+// 
+// Author: Travis J. Galoppo (tgaloppo@gmail.com)
+// 
+// SPDX-License-Identifier: MIT
+// ==============================================================================
 #include <algorithm>
 #include <cstring>
 #include <vector>
-#include <random>
-#include <unistd.h>
-#include <sys/mman.h>
+#include <cerrno>
+#include <system_error>
+#include <sys/random.h>
+#include "crypto.hpp"
 #include "chacha20.hpp"
 #include "endian.hpp"
 
 namespace crypto
 {
-
-void zero_memory(uint8_t* data, std::size_t length)
-{
-    volatile uint8_t* ptr = data;
-    for (std::size_t j = 0; j < length; j++)
-    {
-        *(ptr++) = 0;
-    }
-}
-
-void armor_memory(void* ptr, size_t size)
-{
-    // Cast to unsigned immediately to ensure safe bitwise arithmetic
-    uintptr_t page_size = static_cast<uintptr_t>(::sysconf(_SC_PAGESIZE));
-    uintptr_t addr = reinterpret_cast<uintptr_t>(ptr);
-    
-    uintptr_t aligned_addr = addr & ~(page_size - 1);
-    size_t aligned_size = (addr - aligned_addr) + size;
-    void* lock_ptr = reinterpret_cast<void*>(aligned_addr);
-
-    ::mlock(lock_ptr, aligned_size);
-    ::madvise(lock_ptr, aligned_size, MADV_DONTDUMP);
-}
-
-void dearmor_memory(void* ptr, size_t size)
-{
-    uintptr_t page_size = static_cast<uintptr_t>(::sysconf(_SC_PAGESIZE));
-    uintptr_t addr = reinterpret_cast<uintptr_t>(ptr);
-    
-    uintptr_t aligned_addr = addr & ~(page_size - 1);
-    size_t aligned_size = (addr - aligned_addr) + size;
-    void* lock_ptr = reinterpret_cast<void*>(aligned_addr);
-
-    // Explicitly cast void* to uint8_t* for zero_memory
-    crypto::zero_memory(static_cast<uint8_t*>(ptr), size); 
-    ::madvise(lock_ptr, aligned_size, MADV_DODUMP);
-    ::munlock(lock_ptr, aligned_size);
-}
-
 namespace chacha20
 {
 
+// bit roll left
 static uint32_t rotl(uint32_t x, std::size_t n)
 {
     return (x << n) | (x >> (32 - n));
@@ -73,52 +44,49 @@ static void unpack_int32_little_endian(uint8_t* dst, const uint32_t* src, std::s
     }
 }
 
-void initialize(const key& p_key, const nonce& p_nonce, state& p_state)
+void initialize(const Key& key, const Nonce& nonce, State& state)
 {
     // 0 - 3 are magic: "expand 32-byte k"
-    p_state[0] = static_cast<uint32_t>('e')        | (static_cast<uint32_t>('x') << 8)  |
+    state[0] = static_cast<uint32_t>('e')          | (static_cast<uint32_t>('x') << 8)  |
                 (static_cast<uint32_t>('p') << 16) | (static_cast<uint32_t>('a') << 24);
-    p_state[1] = static_cast<uint32_t>('n')        | (static_cast<uint32_t>('d') << 8)  |
+    state[1] = static_cast<uint32_t>('n')          | (static_cast<uint32_t>('d') << 8)  |
                 (static_cast<uint32_t>(' ') << 16) | (static_cast<uint32_t>('3') << 24);
-    p_state[2] = static_cast<uint32_t>('2')        | (static_cast<uint32_t>('-') << 8)  |
+    state[2] = static_cast<uint32_t>('2')          | (static_cast<uint32_t>('-') << 8)  |
                 (static_cast<uint32_t>('b') << 16) | (static_cast<uint32_t>('y') << 24);
-    p_state[3] = static_cast<uint32_t>('t')        | (static_cast<uint32_t>('e') << 8)  |
+    state[3] = static_cast<uint32_t>('t')          | (static_cast<uint32_t>('e') << 8)  |
                 (static_cast<uint32_t>(' ') << 16) | (static_cast<uint32_t>('k') << 24);               
 
     // 4 - 11 are key
-    pack_uint32_little_endian(&p_state[4], &p_key[0], 8);
+    pack_uint32_little_endian(&state[4], &key[0], 8);
 
     // 12 is counter, which starts at 1 except for when creating
     // one-time auth key for poly1305
-    p_state[12] = 1;
+    state[12] = 1;
 
     // 13 - 15 are nonce
-    pack_uint32_little_endian(&p_state[13], &p_nonce[0], 3);
+    pack_uint32_little_endian(&state[13], &nonce[0], 3);
 }
 
 // intended for use generating one-time auth key for poly1305
-void initialize_poly1305(const key& p_key, const nonce& p_nonce, state& p_state)
+void initialize_poly1305(const Key& key, const Nonce& nonce, State& state)
 {
-    initialize(p_key, p_nonce, p_state);
-    p_state[12] = 0;
+    initialize(key, nonce, state);
+    state[12] = 0;
 }
 
-nonce create_nonce()
+Nonce create_nonce()
 {
-    nonce nonce_;
-    std::random_device rd; 
-    
-    // std::random_device generates 32-bit unsigned integers. 
-    for (std::size_t i = 0; i < 3; ++i)
+    Nonce nonce;
+    ssize_t retval;
+    do
     {
-        uint32_t val = rd();
-        nonce_[i * 4 + 0] = static_cast<uint8_t>(val & 0xFF);
-        nonce_[i * 4 + 1] = static_cast<uint8_t>((val >> 8) & 0xFF);
-        nonce_[i * 4 + 2] = static_cast<uint8_t>((val >> 16) & 0xFF);
-        nonce_[i * 4 + 3] = static_cast<uint8_t>((val >> 24) & 0xFF);
-    }
-
-    return nonce_;
+        retval = getrandom(nonce.data(), nonce.size(), 0);
+        if (retval < 0 && errno != EINTR)
+        {
+            throw std::system_error(errno, std::generic_category(), "getrandom() failed");
+        }
+    } while(retval < static_cast<ssize_t>(nonce.size()) && errno == EINTR);
+    return nonce;
 }
 
 void quarter_round(uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d)
@@ -140,9 +108,9 @@ void quarter_round(uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d)
     b = rotl(b, 7);
 }
 
-void block(state& p_state, std::array<uint8_t, 64>& out_stream)
+void block(State& state, std::array<uint8_t, 64>& out_stream)
 {
-    state work(p_state);
+    State work(state);
 
     for (std::size_t j = 0; j < 10; j++)
     {
@@ -159,21 +127,21 @@ void block(state& p_state, std::array<uint8_t, 64>& out_stream)
 
     for (std::size_t j = 0; j < 16; j++)
     {
-        work[j] += p_state[j];
+        work[j] += state[j];
     }
 
     // update for next round
-    p_state[12] += 1;
+    state[12] += 1;
 
     unpack_int32_little_endian(&out_stream[0], &work[0], 16);
 }
 
-void encrypt(uint8_t* data, std::size_t length, const key& p_key, const nonce& p_nonce)
+void encrypt(uint8_t* data, std::size_t length, const Key& key, const Nonce& nonce)
 {
-    state state_;
+    State state_;
     std::array<uint8_t, 64> cipher_stream;
 
-    initialize(p_key, p_nonce, state_);
+    initialize(key, nonce, state_);
 
     std::size_t n_blocks = (length + 63) / 64;
     for (std::size_t j = 0; j < n_blocks; j++)

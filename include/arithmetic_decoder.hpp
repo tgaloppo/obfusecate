@@ -1,3 +1,12 @@
+// ==============================================================================
+// ObFUSEcate
+// arithmetic_decoder.hpp
+// 
+// Author: Travis J. Galoppo (tgaloppo@gmail.com)
+// Description: Arithmetic decoder using 32 bit distribution boundaries
+// 
+// SPDX-License-Identifier: MIT
+// ==============================================================================
 #pragma once
 
 #include <cstdint>

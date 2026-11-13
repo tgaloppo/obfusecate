@@ -1,10 +1,18 @@
+// ==============================================================================
+// ObFUSEcate
+// test_block_device.cpp
+// 
+// Author: Travis J. Galoppo (tgaloppo@gmail.com)
+// 
+// SPDX-License-Identifier: MIT
+// ==============================================================================
 #include <gtest/gtest.h>
 #include <vector>
 #include <string>
 #include <random>
-#include "cryptofs.hpp" // Assuming this is where create_compressed_block is declared
+#include "block_device.hpp" // Assuming this is where create_compressed_block is declared
 
-using namespace cryptofs;
+using namespace obfusecate;
 
 TEST(BlockIntegrationTest, BasicTextRoundTrip) {
     std::string text = "Integrating the frequency table and the payload into a single block.";

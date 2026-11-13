@@ -1,3 +1,11 @@
+// ==============================================================================
+// ObFUSEcate
+// error_correction.cpp
+// 
+// Author: Travis J. Galoppo (tgaloppo@gmail.com)
+// 
+// SPDX-License-Identifier: MIT
+// ==============================================================================
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -63,9 +71,18 @@ void calculate_crc8_vector(const uint8_t* data, std::size_t length, std::vector<
 void calculate_parity_vector(const uint8_t* data, std::size_t length, std::array<uint8_t, ECC_SHARD_SIZE>& parity)
 {
     parity.fill(0);
-    for (std::size_t j = 0; j < length; j++)
+    std::size_t n_shards = (length + ECC_SHARD_SIZE - 1) / ECC_SHARD_SIZE; // number of full shards
+    const uint8_t* shard_ptr = data;
+
+    // process full shards
+    for (std::size_t j = 0; j < n_shards; j++)
     {
-        parity[j % ECC_SHARD_SIZE] ^= data[j];
+        std::size_t n_bytes = std::min(ECC_SHARD_SIZE, length - j * ECC_SHARD_SIZE);
+        for (std::size_t k = 0; k < n_bytes; k++)
+        {
+            parity[k] ^= shard_ptr[k];
+        }
+        shard_ptr += ECC_SHARD_SIZE;
     }
 }
 
@@ -79,16 +96,23 @@ bool recover_damaged_shard(uint8_t* data, std::size_t length, std::size_t shard_
     std::array<uint8_t, ECC_SHARD_SIZE> recovery;
     std::memcpy(recovery.data(), parity_vector, ECC_SHARD_SIZE);
 
-    // xor all columns excluding the corrupt shard
-    for (std::size_t j = 0; j < length; j++)
+    // total number of shards, including potential partial shard
+    std::size_t n_shards = (length + ECC_SHARD_SIZE - 1) / ECC_SHARD_SIZE;
+
+    // xor all shards excluding shard_index
+    for (std::size_t j = 0; j < n_shards; j++)
     {
-        if (j / ECC_SHARD_SIZE != shard_index)
+        if (j == shard_index)
         {
-            recovery[j % ECC_SHARD_SIZE] ^= data[j];
+            continue;
         }
-        else // skip past the whole shard...
+
+        const uint8_t* shard_ptr = data + j * ECC_SHARD_SIZE;
+
+        std::size_t n_bytes = std::min(ECC_SHARD_SIZE, length - j * ECC_SHARD_SIZE);
+        for (std::size_t k = 0; k < n_bytes; k++)
         {
-            j += ECC_SHARD_SIZE - 1; // loop increment will account for final byte
+            recovery[k] ^= shard_ptr[k];
         }
     }
 

@@ -1,3 +1,12 @@
+// ==============================================================================
+// ObFUSEcate
+// endian.hpp
+// 
+// Author: Travis J. Galoppo (tgaloppo@gmail.com)
+// Description: Read / Write unsigned integers to buffers in little endian format
+// 
+// SPDX-License-Identifier: MIT
+// ==============================================================================
 #pragma once
 
 #include <cstdint>

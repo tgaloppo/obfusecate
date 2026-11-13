@@ -1,3 +1,12 @@
+// ==============================================================================
+// ObFUSEcate
+// symbol_frequency.hpp
+// 
+// Author: Travis J. Galoppo (tgaloppo@gmail.com)
+// Description: Computes cumulative distribution of bytes in a given data block
+// 
+// SPDX-License-Identifier: MIT
+// ==============================================================================
 #pragma once
 
 #include <array>

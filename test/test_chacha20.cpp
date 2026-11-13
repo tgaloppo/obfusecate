@@ -1,3 +1,11 @@
+// ==============================================================================
+// ObFUSEcate
+// test_chacha20.cpp
+// 
+// Author: Travis J. Galoppo (tgaloppo@gmail.com)
+// 
+// SPDX-License-Identifier: MIT
+// ==============================================================================
 #include <gtest/gtest.h>
 #include <vector>
 #include "chacha20.hpp"
@@ -5,14 +13,14 @@
 
 TEST(ChaCha20Test, RFC8439BlockGeneration)
 {
-    crypto::chacha20::key key = {
+    crypto::chacha20::Key key = {
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 
         0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
         0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 
         0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f
     };
     
-    crypto::chacha20::nonce nonce = {
+    crypto::chacha20::Nonce nonce = {
         0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x4a, 0x00, 0x00, 0x00, 0x00
     };
 
@@ -23,7 +31,7 @@ TEST(ChaCha20Test, RFC8439BlockGeneration)
         0xb5, 0x12, 0x9c, 0xd1, 0xde, 0x16, 0x4e, 0xb9, 0xcb, 0xd0, 0x83, 0xe8, 0xa2, 0x50, 0x3c, 0x4e
     };
 
-    crypto::chacha20::state state;
+    crypto::chacha20::State state;
     std::array<uint8_t, 64> actual_stream;
 
     crypto::chacha20::initialize(key, nonce, state);
@@ -37,12 +45,12 @@ TEST(ChaCha20Test, RFC8439BlockGeneration)
 
 TEST(ChaCha20Poly1305Test, RFC8439AEADOrchestrator)
 {
-    crypto::chacha20::key key = {
+    crypto::chacha20::Key key = {
         0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,
         0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f
     };
 
-    crypto::chacha20::nonce nonce = {
+    crypto::chacha20::Nonce nonce = {
         0x07, 0x00, 0x00, 0x00, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47
     };
 
@@ -54,9 +62,9 @@ TEST(ChaCha20Poly1305Test, RFC8439AEADOrchestrator)
     std::size_t pt_len = 114;
     
     std::vector<uint8_t> ciphertext(pt_len);
-    crypto::chacha20::poly1305::mac actual_mac;
+    crypto::chacha20::poly1305::MAC actual_mac;
 
-    crypto::chacha20::poly1305::mac expected_mac = {
+    crypto::chacha20::poly1305::MAC expected_mac = {
         0x1a, 0xe1, 0x0b, 0x59, 0x4f, 0x09, 0xe2, 0x6a, 0x7e, 0x90, 0x2e, 0xcb, 0xd0, 0x60, 0x06, 0x91
     };
 
@@ -75,12 +83,12 @@ TEST(ChaCha20Poly1305Test, RFC8439AEADOrchestrator)
 
 class ChaCha20Poly1305LifecycleTest : public ::testing::Test {
 protected:
-    crypto::chacha20::key key = {
+    crypto::chacha20::Key key = {
         0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,
         0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f
     };
 
-    crypto::chacha20::nonce nonce = {
+    crypto::chacha20::Nonce nonce = {
         0x07, 0x00, 0x00, 0x00, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47
     };
 
@@ -92,7 +100,7 @@ protected:
     std::size_t pt_len;
     std::vector<uint8_t> plaintext;
     std::vector<uint8_t> ciphertext;
-    crypto::chacha20::poly1305::mac mac;
+    crypto::chacha20::poly1305::MAC MAC;
 
     void SetUp() override {
         pt_len = strlen(pt_str);
@@ -104,7 +112,7 @@ protected:
             plaintext.data(), pt_len,
             aad.data(), aad.size(),
             key, nonce,
-            ciphertext.data(), mac
+            ciphertext.data(), MAC
         );
     }
 };
@@ -117,7 +125,7 @@ TEST_F(ChaCha20Poly1305LifecycleTest, DecryptHappyPath)
         ciphertext.data(), pt_len,
         aad.data(), aad.size(),
         key, nonce,
-        mac,
+        MAC,
         decrypted.data()
     );
 
@@ -134,7 +142,7 @@ TEST_F(ChaCha20Poly1305LifecycleTest, KillSwitchOnTamperedMAC)
     std::vector<uint8_t> decrypted(pt_len, 0);
     
     // Flip a single bit in the MAC
-    crypto::chacha20::poly1305::mac tampered_mac = mac;
+    crypto::chacha20::poly1305::MAC tampered_mac = MAC;
     tampered_mac[0] ^= 0x01;
 
     bool success = crypto::chacha20::poly1305::decrypt(
@@ -160,7 +168,7 @@ TEST_F(ChaCha20Poly1305LifecycleTest, KillSwitchOnTamperedCiphertext)
         tampered_ciphertext.data(), pt_len,
         aad.data(), aad.size(),
         key, nonce,
-        mac,
+        MAC,
         decrypted.data()
     );
 
@@ -179,7 +187,7 @@ TEST_F(ChaCha20Poly1305LifecycleTest, KillSwitchOnTamperedAAD)
         ciphertext.data(), pt_len,
         tampered_aad.data(), tampered_aad.size(),
         key, nonce,
-        mac,
+        MAC,
         decrypted.data()
     );
 

@@ -1,3 +1,11 @@
+// ==============================================================================
+// ObFUSEcate
+// symbol_frequency.cpp
+// 
+// Author: Travis J. Galoppo (tgaloppo@gmail.com)
+// 
+// SPDX-License-Identifier: MIT
+// ==============================================================================
 #include <algorithm>
 #include <cmath>
 #include "symbol_frequency.hpp"

@@ -13,26 +13,26 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 # Test executable
-add_executable(cryptofs_tests
+add_executable(obfusecate_tests
     test_bitstream.cpp
     test_compression.cpp
-#    test_cryptofs.cpp
+    test_block_device.cpp
     test_chacha20.cpp
-#    test_fileio.cpp
+    test_fileio.cpp
     test_error_correction.cpp
-#    test_fileio_ecc.cpp
+    test_fileio_ecc.cpp
 )
 
 # Link against our raw object files and GoogleTest
-target_link_libraries(cryptofs_tests
+target_link_libraries(obfusecate_tests
     PRIVATE
-        $<TARGET_OBJECTS:cryptofs_obj> # Raw objects for white-box testing
-        cryptofs_compiler_flags   
+        $<TARGET_OBJECTS:obfusecate_obj> # Raw objects for white-box testing
+        compiler_flags   
         GTest::gtest     
         GTest::gtest_main
 )
 
-target_include_directories(cryptofs_tests
+target_include_directories(obfusecate_tests
     PRIVATE
         ${googletest_SOURCE_DIR}/googletest/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../include  # Public headers
@@ -40,4 +40,4 @@ target_include_directories(cryptofs_tests
 )
 
 include(GoogleTest)
-gtest_discover_tests(cryptofs_tests)
+gtest_discover_tests(obfusecate_tests)

@@ -1,3 +1,11 @@
+// ==============================================================================
+// ObFUSEcate
+// test_bitstream.cpp
+// 
+// Author: Travis J. Galoppo (tgaloppo@gmail.com)
+// 
+// SPDX-License-Identifier: MIT
+// ==============================================================================
 #include <gtest/gtest.h>
 #include "bitstream.hpp"
 

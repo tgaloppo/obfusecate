@@ -1,3 +1,11 @@
+// ==============================================================================
+// ObFUSEcate
+// test_compression.cpp
+// 
+// Author: Travis J. Galoppo (tgaloppo@gmail.com)
+// 
+// SPDX-License-Identifier: MIT
+// ==============================================================================
 #include <gtest/gtest.h>
 #include <vector>
 #include <string>
@@ -48,7 +56,7 @@ TEST(ArithmeticCodingTest, ShortStringRoundTrip) {
     
     symbol_frequency freq(input.data(), input.size());
     bitstream::writer out;
-    arithmetic_coder encoder(out, freq);
+    arithmetic_encoder encoder(out, freq);
     
     encoder.encode(input.data(), input.size());
     encoder.flush();
@@ -77,7 +85,7 @@ TEST(ArithmeticCodingTest, FullChunkRandomData) {
 
     symbol_frequency freq(input.data(), input.size());
     bitstream::writer out;
-    arithmetic_coder encoder(out, freq);
+    arithmetic_encoder encoder(out, freq);
     
     encoder.encode(input.data(), input.size());
     encoder.flush();
@@ -102,7 +110,7 @@ TEST(ArithmeticCodingTest, ZeroEntropy) {
     
     symbol_frequency freq(input.data(), input.size());
     bitstream::writer out;
-    arithmetic_coder encoder(out, freq);
+    arithmetic_encoder encoder(out, freq);
     
     encoder.encode(input.data(), input.size());
     encoder.flush();
@@ -139,7 +147,7 @@ TEST(ArithmeticCodingTest, DeepUnderflowStraddle) {
 
     symbol_frequency freq(input.data(), input.size());
     bitstream::writer out;
-    arithmetic_coder encoder(out, freq);
+    arithmetic_encoder encoder(out, freq);
     
     encoder.encode(input.data(), input.size());
     encoder.flush();

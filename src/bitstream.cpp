@@ -1,3 +1,11 @@
+// ==============================================================================
+// ObFUSEcate
+// bitstream.cpp
+// 
+// Author: Travis J. Galoppo (tgaloppo@gmail.com)
+// 
+// SPDX-License-Identifier: MIT
+// ==============================================================================
 #include <algorithm>
 #include "bitstream.hpp"
 
@@ -36,7 +44,7 @@ writer& writer::append(uint64_t x, std::size_t n)
     }
 
     // zero out superfluous bits of x
-    x &= ~((mask_full << n / 2) << (n - n / 2));
+    x &= ~(safe_shift(mask_full, n));
     
     // calculate initial offset and bit shift
     std::size_t offset = mPosition / 8;
@@ -95,7 +103,7 @@ reader& reader::extract(uint64_t& x, std::size_t n)
         std::size_t shift  = mPosition % 8;
 
         // mask the number of bits we want
-        uint64_t mask = ~((mask_full << n / 2) << (n - n / 2));
+        uint64_t mask = ~(safe_shift(mask_full, n));
 
         // extract initial bits (may be partial)
         const uint8_t* buf = &mData[offset];

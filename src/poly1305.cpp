@@ -1,5 +1,14 @@
+// ==============================================================================
+// ObFUSEcate
+// poly1305.cpp
+// 
+// Author: Travis J. Galoppo (tgaloppo@gmail.com)
+// 
+// SPDX-License-Identifier: MIT
+// ==============================================================================
 #include <cstring>
 #include <vector>
+#include "crypto.hpp"
 #include "poly1305.hpp"
 #include "endian.hpp"
 
@@ -23,10 +32,10 @@ static bool constant_time_mac_compare(const std::array<uint8_t, 16>& a, const st
 void encrypt(
     const uint8_t* plaintext, std::size_t pt_len,
     const uint8_t* aad, std::size_t aad_len,
-    const key& key, const nonce& nonce,
-    uint8_t* ciphertext, mac& out_mac)
+    const Key& key, const Nonce& nonce,
+    uint8_t* ciphertext, MAC& out_mac)
 {
-    state state;
+    State state;
     std::array<uint8_t, 64> one_time_key;
     initialize_poly1305(key, nonce, state);
     block(state, one_time_key);
@@ -73,142 +82,120 @@ void encrypt(
     zero_memory(reinterpret_cast<uint8_t*>(state.data()), 64);
 }
 
-void compute_mac(const std::array<uint8_t, 64>& key, 
-                  const uint8_t* message, std::size_t length, 
-                  mac& out_mac)
+// extract a 130-bit value as 5 26-bit limbs
+static std::array<uint64_t, 5> extract_limbs(const uint8_t* buf)
 {
-    std::array<uint64_t, 5> r;
-    std::array<uint64_t, 5> a {};
-    r[0] = ( static_cast<uint64_t>(key[0])         | 
-            (static_cast<uint64_t>(key[1]) << 8)   | 
-            (static_cast<uint64_t>(key[2]) << 16)  | 
-            (static_cast<uint64_t>(key[3]) << 24))   & 0x3FFFFFF;
-    r[1] = ((static_cast<uint64_t>(key[3]) >> 2)   | 
-            (static_cast<uint64_t>(key[4]) << 6)   | 
-            (static_cast<uint64_t>(key[5]) << 14)  | 
-            (static_cast<uint64_t>(key[6]) << 22))   & 0x3FFFFFF;
-    r[2] = ((static_cast<uint64_t>(key[6]) >> 4)   | 
-            (static_cast<uint64_t>(key[7]) << 4)   | 
-            (static_cast<uint64_t>(key[8]) << 12)  | 
-            (static_cast<uint64_t>(key[9]) << 20))   & 0x3FFFFFF;
-    r[3] = ((static_cast<uint64_t>(key[9]) >> 6)   | 
-            (static_cast<uint64_t>(key[10]) << 2)  | 
-            (static_cast<uint64_t>(key[11]) << 10) | 
-            (static_cast<uint64_t>(key[12]) << 18))  & 0x3FFFFFF;
-    r[4] = ( static_cast<uint64_t>(key[13])        | 
-            (static_cast<uint64_t>(key[14]) << 8)  | 
-            (static_cast<uint64_t>(key[15]) << 16))  & 0x3FFFFFF;
+    return {
+        (endian::read_u32(buf +  0) >> 0) & 0x3FFFFFF,
+        (endian::read_u32(buf +  3) >> 2) & 0x3FFFFFF,
+        (endian::read_u32(buf +  6) >> 4) & 0x3FFFFFF,
+        (endian::read_u32(buf +  9) >> 6) & 0x3FFFFFF,
+        (endian::read_u32(buf + 12) >> 8)
+    };
+}
 
-    std::array<uint64_t, 5> s {};
-    s[1] = r[1] * 5;
-    s[2] = r[2] * 5;
-    s[3] = r[3] * 5;
-    s[4] = r[4] * 5;            
+// compute a = (a * r) mod (2^130 - 5), where r5[i] = 5 * r[i]
+static void multiply_mod_p(std::array<uint64_t, 5>& a, const std::array<uint64_t, 5>& r, const std::array<uint64_t, 5>& r5)
+{
+    uint64_t t[5] = {
+        (a[0] * r[0]) + (a[1] * r5[4]) + (a[2] * r5[3]) + (a[3] * r5[2]) + (a[4] * r5[1]),
+        (a[0] * r[1]) + (a[1] * r[0])  + (a[2] * r5[4]) + (a[3] * r5[3]) + (a[4] * r5[2]),
+        (a[0] * r[2]) + (a[1] * r[1])  + (a[2] * r[0])  + (a[3] * r5[4]) + (a[4] * r5[3]),
+        (a[0] * r[3]) + (a[1] * r[2])  + (a[2] * r[1])  + (a[3] * r[0])  + (a[4] * r5[4]),
+        (a[0] * r[4]) + (a[1] * r[3])  + (a[2] * r[2])  + (a[3] * r[1])  + (a[4] * r[0])
+    };
 
-    std::size_t n_chunks = length / 16; // guaranteed to be multiple of 16
-    std::array<uint64_t, 5> chunk;
-    for (std::size_t j = 0; j < n_chunks; j++)
+    // Propagate 26-bit carries across limbs
+    for (std::size_t i = 0; i < 4; ++i)
     {
-        chunk[0] = ( static_cast<uint64_t>(message[j*16+0])         | 
-                    (static_cast<uint64_t>(message[j*16+1]) << 8)   | 
-                    (static_cast<uint64_t>(message[j*16+2]) << 16)  | 
-                    (static_cast<uint64_t>(message[j*16+3]) << 24))   & 0x3FFFFFF;
-        chunk[1] = ((static_cast<uint64_t>(message[j*16+3]) >> 2)   | 
-                    (static_cast<uint64_t>(message[j*16+4]) << 6)   | 
-                    (static_cast<uint64_t>(message[j*16+5]) << 14)  | 
-                    (static_cast<uint64_t>(message[j*16+6]) << 22))   & 0x3FFFFFF;
-        chunk[2] = ((static_cast<uint64_t>(message[j*16+6]) >> 4)   | 
-                    (static_cast<uint64_t>(message[j*16+7]) << 4)   | 
-                    (static_cast<uint64_t>(message[j*16+8]) << 12)  | 
-                    (static_cast<uint64_t>(message[j*16+9]) << 20))   & 0x3FFFFFF;
-        chunk[3] = ((static_cast<uint64_t>(message[j*16+9]) >> 6)   | 
-                    (static_cast<uint64_t>(message[j*16+10]) << 2)  | 
-                    (static_cast<uint64_t>(message[j*16+11]) << 10) | 
-                    (static_cast<uint64_t>(message[j*16+12]) << 18))  & 0x3FFFFFF;
-        chunk[4] = ( static_cast<uint64_t>(message[j*16+13])        | 
-                    (static_cast<uint64_t>(message[j*16+14]) << 8)  | 
-                    (static_cast<uint64_t>(message[j*16+15]) << 16))  & 0x3FFFFFF;
-        chunk[4] |= (1ULL << 24);
-        
-        a[0] += chunk[0];
-        a[1] += chunk[1];
-        a[2] += chunk[2];
-        a[3] += chunk[3];
-        a[4] += chunk[4];
+        a[i] = t[i] & 0x3FFFFFF;
+        t[i + 1] += t[i] >> 26;
+    }
+    a[4] = t[4] & 0x3FFFFFF;
 
-        uint64_t t0 = (a[0] * r[0]) + (a[1] * s[4]) + (a[2] * s[3]) + (a[3] * s[2]) + (a[4] * s[1]);
-        uint64_t t1 = (a[0] * r[1]) + (a[1] * r[0]) + (a[2] * s[4]) + (a[3] * s[3]) + (a[4] * s[2]);
-        uint64_t t2 = (a[0] * r[2]) + (a[1] * r[1]) + (a[2] * r[0]) + (a[3] * s[4]) + (a[4] * s[3]);
-        uint64_t t3 = (a[0] * r[3]) + (a[1] * r[2]) + (a[2] * r[1]) + (a[3] * r[0]) + (a[4] * s[4]);
-        uint64_t t4 = (a[0] * r[4]) + (a[1] * r[3]) + (a[2] * r[2]) + (a[3] * r[1]) + (a[4] * r[0]);   
+    // Fold top overflow back into limb 0 using 2^130 == 5 (mod 2^130 - 5)
+    a[0] += (t[4] >> 26) * 5;
+    a[1] += a[0] >> 26;
+    a[0] &= 0x3FFFFFF;
+}
 
-        a[0] = t0 & 0x3FFFFFF;
-        t1 += t0 >> 26;
-        a[1] = t1 & 0x3FFFFFF;
-        t2 += t1 >> 26;
-        a[2] = t2 & 0x3FFFFFF;
-        t3 += t2 >> 26;
-        a[3] = t3 & 0x3FFFFFF;
-        t4 += t3 >> 26;
-        a[4] = t4 & 0x3FFFFFF;
-        
-        a[0] += (t4 >> 26) * 5;
-        a[1] += a[0] >> 26;
-        a[0] &= 0x3FFFFFF;        
+// final reduction: if (a >= 2^130 - 5) a -= (2^130 - 5)
+static void freeze_mod_p(std::array<uint64_t, 5>& a)
+{
+    std::array<uint64_t, 5> g;
+    uint64_t carry = 5;
+    for (std::size_t i = 0; i < 5; ++i)
+    {
+        uint64_t sum = a[i] + carry;
+        g[i]  = sum & 0x3FFFFFF;
+        carry = sum >> 26;
     }
 
-// 1. Final Constant-Time Reduction
-    uint64_t g0 = a[0] + 5;
-    uint64_t g1 = a[1] + (g0 >> 26); g0 &= 0x3FFFFFF;
-    uint64_t g2 = a[2] + (g1 >> 26); g1 &= 0x3FFFFFF;
-    uint64_t g3 = a[3] + (g2 >> 26); g2 &= 0x3FFFFFF;
-    uint64_t g4 = a[4] + (g3 >> 26); g3 &= 0x3FFFFFF;
-    
-    uint64_t mask = (g4 >> 26) - 1; 
-    g4 &= 0x3FFFFFF;
+    // carry is 1 if (a + 5 >= 2^130), else 0.
+    // mask is 0x0000... if carry == 1 (select g), or 0xFFFF... if carry == 0 (select a).
+    uint64_t mask = carry - 1;
+    for (std::size_t i = 0; i < 5; ++i)
+    {
+        a[i] = (a[i] & mask) | (g[i] & ~mask);
+    }
+}
 
-    a[0] = (a[0] & mask) | (g0 & ~mask);
-    a[1] = (a[1] & mask) | (g1 & ~mask);
-    a[2] = (a[2] & mask) | (g2 & ~mask);
-    a[3] = (a[3] & mask) | (g3 & ~mask);
-    a[4] = (a[4] & mask) | (g4 & ~mask);
+void compute_mac(const std::array<uint8_t, 64>& key, 
+                 const uint8_t* message, std::size_t length, 
+                 MAC& out_mac)
+{
+    std::array<uint64_t, 5> a {};
+    std::array<uint64_t, 5> r  = extract_limbs(key.data());
+    std::array<uint64_t, 5> r5 = { 0, r[1] * 5, r[2] * 5, r[3] * 5, r[4] * 5 };
 
-    // 2. Repack to 32-bit
-    uint32_t mac0 = static_cast<uint32_t>((a[0] | (a[1] << 26)) & 0xFFFFFFFF);
-    uint32_t mac1 = static_cast<uint32_t>(((a[1] >> 6) | (a[2] << 20)) & 0xFFFFFFFF);
-    uint32_t mac2 = static_cast<uint32_t>(((a[2] >> 12) | (a[3] << 14)) & 0xFFFFFFFF);
-    uint32_t mac3 = static_cast<uint32_t>(((a[3] >> 18) | (a[4] << 8)) & 0xFFFFFFFF);
+    std::size_t n_chunks = length / 16;
+    std::array<uint64_t, 5> chunk;
+    for (std::size_t j = 0; j < n_chunks; ++j)
+    {
+        chunk = extract_limbs(&message[j * 16]);
+        chunk[4] |= (1ULL << 24); // Append 1-bit at bit 128 per RFC 8439
 
-    // 3. Add the 's' key (key[16..31])
-    uint32_t s0 = static_cast<uint32_t>(key[16]) | (static_cast<uint32_t>(key[17]) << 8) | (static_cast<uint32_t>(key[18]) << 16) | (static_cast<uint32_t>(key[19]) << 24);
-    uint32_t s1 = static_cast<uint32_t>(key[20]) | (static_cast<uint32_t>(key[21]) << 8) | (static_cast<uint32_t>(key[22]) << 16) | (static_cast<uint32_t>(key[23]) << 24);
-    uint32_t s2 = static_cast<uint32_t>(key[24]) | (static_cast<uint32_t>(key[25]) << 8) | (static_cast<uint32_t>(key[26]) << 16) | (static_cast<uint32_t>(key[27]) << 24);
-    uint32_t s3 = static_cast<uint32_t>(key[28]) | (static_cast<uint32_t>(key[29]) << 8) | (static_cast<uint32_t>(key[30]) << 16) | (static_cast<uint32_t>(key[31]) << 24);
+        for (std::size_t i = 0; i < 5; ++i)
+        {
+            a[i] += chunk[i];
+        }
 
-    uint64_t f0 = static_cast<uint64_t>(mac0) + s0;
-    mac0 = static_cast<uint32_t>(f0);
-    uint64_t f1 = static_cast<uint64_t>(mac1) + s1 + (f0 >> 32);
-    mac1 = static_cast<uint32_t>(f1);
-    uint64_t f2 = static_cast<uint64_t>(mac2) + s2 + (f1 >> 32);
-    mac2 = static_cast<uint32_t>(f2);
-    uint64_t f3 = static_cast<uint64_t>(mac3) + s3 + (f2 >> 32);
-    mac3 = static_cast<uint32_t>(f3);
+        multiply_mod_p(a, r, r5);
+    }
 
-    // 4. Serialize to out_mac
-    endian::write_u32(&out_mac[0],  mac0);
-    endian::write_u32(&out_mac[4],  mac1);
-    endian::write_u32(&out_mac[8],  mac2);
-    endian::write_u32(&out_mac[12], mac3);
+    freeze_mod_p(a);
+
+    // repack 26-bit limbs into four 32-bit words (mod 2^128)
+    uint32_t mac[4] = {
+        static_cast<uint32_t>( a[0]        | (a[1] << 26)),
+        static_cast<uint32_t>((a[1] >>  6) | (a[2] << 20)),
+        static_cast<uint32_t>((a[2] >> 12) | (a[3] << 14)),
+        static_cast<uint32_t>((a[3] >> 18) | (a[4] <<  8))
+    };
+
+    // add 128-bit one-time pad s (key[16..31]) modulo 2^128
+    uint64_t carry = 0;
+    for (std::size_t i = 0; i < 4; ++i)
+    {
+        uint64_t sum = static_cast<uint64_t>(mac[i]) + endian::read_u32(&key[16 + i * 4]) + carry;
+        endian::write_u32(&out_mac[i * 4], static_cast<uint32_t>(sum));
+        carry = sum >> 32;
+    }
+
+    zero_memory(reinterpret_cast<uint8_t*>(r.data()), sizeof(r));
+    zero_memory(reinterpret_cast<uint8_t*>(r5.data()), sizeof(r5));
+    zero_memory(reinterpret_cast<uint8_t*>(a.data()), sizeof(a));
+    zero_memory(reinterpret_cast<uint8_t*>(chunk.data()), sizeof(chunk));
 }
 
 bool decrypt(
     const uint8_t* ciphertext, std::size_t ct_len,
     const uint8_t* aad, std::size_t aad_len,
-    const key& key, const nonce& nonce,
-    const mac& expected_mac,
+    const Key& key, const Nonce& nonce,
+    const MAC& expected_mac,
     uint8_t* plaintext)
 {
-    state state;
+    State state;
     std::array<uint8_t, 64> one_time_key;
     initialize_poly1305(key, nonce, state);
     block(state, one_time_key);

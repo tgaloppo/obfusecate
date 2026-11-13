@@ -1,18 +1,26 @@
+// ==============================================================================
+// ObFUSEcate
+// test_fileio_ecc.cpp
+// 
+// Author: Travis J. Galoppo (tgaloppo@gmail.com)
+// 
+// SPDX-License-Identifier: MIT
+// ==============================================================================
 #include <gtest/gtest.h>
 #include <filesystem>
 #include <fstream>
 #include <random>
 #include <cstring>
-#include "cryptofs.hpp"
+#include "block_device.hpp"
 #include "error_correction.hpp"
 
-using namespace cryptofs;
+using namespace obfusecate;
 
 class CryptfsECCTest : public ::testing::Test 
 {
 protected:
-    std::string m_test_file = "ecc_test_volume.arcane";
-    crypto::chacha20::key m_test_key;
+    std::string m_test_file = "ecc_test_volume.ofs";
+    crypto::chacha20::Key m_test_key;
 
     void SetUp() override 
     {
@@ -50,18 +58,20 @@ protected:
     size_t get_payload_offset(size_t crc_size)
     {
         // superblock + block_header(28) + crc_size_marker(2) + crc_array + parity(64)
-        return sizeof(file_superblock) + 28 + 2 + crc_size + ecc::ECC_SHARD_SIZE;
+        return sizeof(file_header) + 28 + 2 + crc_size + ecc::ECC_SHARD_SIZE;
     }
 };
 
 TEST_F(CryptfsECCTest, RecoverSingleByteCorruption) 
 {
-    std::vector<uint8_t> write_buf = generate_random_payload(4096);
+    std::vector<uint8_t> write_buf; 
     
     {
-        cryptofs_file fs(m_test_file, m_test_key);
-        fs.set_logical_size(4096);
-        EXPECT_TRUE(fs.write_logical_block(0, write_buf));
+        block_device fs(m_test_file, m_test_key);
+        uint64_t block_size = fs.get_logical_block_size();
+        fs.set_logical_size(block_size);
+        write_buf = generate_random_payload(block_size);
+        EXPECT_NO_THROW(fs.write_logical_block(0, write_buf));
     }
 
     // Determine the CRC size for a highly entropic 4096 byte payload.
@@ -79,7 +89,7 @@ TEST_F(CryptfsECCTest, RecoverSingleByteCorruption)
     }
 
     // Remount and attempt read. ECC should silently repair it.
-    cryptofs_file fs(m_test_file, m_test_key);
+    block_device fs(m_test_file, m_test_key);
     std::vector<uint8_t> read_buf;
     
     EXPECT_NO_THROW(fs.read_logical_block(0, read_buf));
@@ -91,9 +101,9 @@ TEST_F(CryptfsECCTest, UnrecoverableMultiShardCorruption)
     std::vector<uint8_t> write_buf = generate_random_payload(1024 * 16);
     
     {
-        cryptofs_file fs(m_test_file, m_test_key);
+        block_device fs(m_test_file, m_test_key);
         fs.set_logical_size(1024 * 32);
-        EXPECT_TRUE(fs.write_logical_block(0, write_buf));
+        EXPECT_NO_THROW(fs.write_logical_block(0, write_buf));
     }
 
     size_t approximate_crc_size = 129; 
@@ -113,7 +123,7 @@ TEST_F(CryptfsECCTest, UnrecoverableMultiShardCorruption)
 
     // Remount and attempt read. 
     // ECC will detect multiple CRC failures and throw "Unrecoverable corruption"
-    cryptofs_file fs(m_test_file, m_test_key);
+    block_device fs(m_test_file, m_test_key);
     std::vector<uint8_t> read_buf;
     
     EXPECT_THROW(
@@ -129,26 +139,31 @@ TEST_F(CryptfsECCTest, UnrecoverableMultiShardCorruption)
 
 TEST_F(CryptfsECCTest, HeaderTamperingBypassesECC) 
 {
-    std::vector<uint8_t> write_buf = generate_random_payload(4096);
+    std::vector<uint8_t> write_buf; 
     
     {
-        cryptofs_file fs(m_test_file, m_test_key);
-        fs.set_logical_size(4096);
-        EXPECT_TRUE(fs.write_logical_block(0, write_buf));
+        block_device fs(m_test_file, m_test_key);
+        uint64_t block_size = fs.get_logical_block_size();
+        fs.set_logical_size(block_size);
+        write_buf = generate_random_payload(block_size);
+        EXPECT_NO_THROW(fs.write_logical_block(0, write_buf));
     }
 
     // Corrupt the ChaCha20 MAC in the block header. 
     // This leaves the payload pristine, but the AEAD orchestrator MUST fail.
     {
         std::fstream raw_file(m_test_file, std::ios::in | std::ios::out | std::ios::binary);
-        raw_file.seekp(static_cast<long int>(sizeof(file_superblock) + 2)); 
-        char tampered_byte = 0x00;
+        raw_file.seekp(static_cast<long int>(sizeof(file_header) + 20)); 
+        char tampered_byte;
+        raw_file.read(&tampered_byte, 1);
+        tampered_byte = ~tampered_byte;
+        raw_file.seekp(static_cast<long int>(sizeof(file_header) + 20)); 
         raw_file.write(&tampered_byte, 1);
     }
 
     // Remount and attempt read. 
     // ECC checks will pass (payload is fine), but Poly1305 will throw.
-    cryptofs_file fs(m_test_file, m_test_key);
+    block_device fs(m_test_file, m_test_key);
     std::vector<uint8_t> read_buf;
     
     EXPECT_THROW(

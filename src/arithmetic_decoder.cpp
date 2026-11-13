@@ -1,3 +1,11 @@
+// ==============================================================================
+// ObFUSEcate
+// arithmetic_decoder.cpp
+// 
+// Author: Travis J. Galoppo (tgaloppo@gmail.com)
+// 
+// SPDX-License-Identifier: MIT
+// ==============================================================================
 #include "arithmetic_decoder.hpp"
 
 namespace compression
@@ -10,7 +18,7 @@ arithmetic_decoder::arithmetic_decoder(bitstream::reader& input_stream, const sy
     uint64_t in_bits;
     for (std::size_t j = 0; j < 32; j++)
     {
-        mInStream.extract(in_bits, 1);
+        mInStream.read_bit(in_bits);
         mValue = (mValue << 1) | static_cast<uint32_t>(in_bits);
     }        
 }
@@ -25,10 +33,10 @@ void arithmetic_decoder::decode(uint8_t* out_ptr, std::size_t length)
 
 uint8_t arithmetic_decoder::next_symbol()
 {
-    uint64_t range  = static_cast<uint64_t>(mHigh - mLow) + 1;
-    uint64_t scale  = static_cast<uint64_t>(mFreqTable.get_total());
-    uint64_t freq   = ((static_cast<uint64_t>(mValue - mLow) + 1) * scale - 1) / range;
-    uint8_t  symbol = mFreqTable.get_symbol(static_cast<uint32_t>(freq));
+    uint64_t range    = static_cast<uint64_t>(mHigh - mLow) + 1;
+    uint64_t scale    = static_cast<uint64_t>(mFreqTable.get_total());
+    uint64_t freq     = ((static_cast<uint64_t>(mValue - mLow) + 1) * scale - 1) / range;
+    uint8_t  symbol   = mFreqTable.get_symbol(static_cast<uint32_t>(freq));
     uint64_t sym_low  = static_cast<uint64_t>(mFreqTable.get_lower(symbol));
     uint64_t sym_high = static_cast<uint64_t>(mFreqTable.get_upper(symbol));        
     uint64_t new_low  = static_cast<uint64_t>(mLow) + sym_low * range / scale;
@@ -46,7 +54,7 @@ uint8_t arithmetic_decoder::next_symbol()
             mValue = mValue << 1;
 
             uint64_t in_bits = 0;
-            mInStream.extract(in_bits, 1);
+            mInStream.read_bit(in_bits);
             mValue |= static_cast<uint32_t>(in_bits);
         }
         else if (mLow >= 0x40000000 && mHigh < 0xC0000000)
@@ -56,7 +64,7 @@ uint8_t arithmetic_decoder::next_symbol()
             mValue = (mValue - 0x40000000) << 1;
 
             uint64_t in_bits = 0;
-            mInStream.extract(in_bits, 1);
+            mInStream.read_bit(in_bits);
             mValue |= static_cast<uint32_t>(in_bits);
         }
         else

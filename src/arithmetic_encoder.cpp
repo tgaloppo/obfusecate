@@ -1,9 +1,17 @@
+// ==============================================================================
+// ObFUSEcate
+// arithmetic_encoder.cpp
+// 
+// Author: Travis J. Galoppo (tgaloppo@gmail.com)
+// 
+// SPDX-License-Identifier: MIT
+// ==============================================================================
 #include "arithmetic_encoder.hpp"
 
 namespace compression
 {
 
-void arithmetic_coder::encode(uint8_t symbol)
+void arithmetic_encoder::encode(uint8_t symbol)
 {
     uint64_t range    = static_cast<uint64_t>(mHigh - mLow) + 1;
     uint64_t sym_low  = static_cast<uint64_t>(mFreqTable.get_lower(symbol));
@@ -23,7 +31,7 @@ void arithmetic_coder::encode(uint8_t symbol)
             uint64_t out_bits = static_cast<uint64_t>(mLow >> 31);
 
             // append bit to bit stream
-            mOutStream.append(out_bits, 1);
+            mOutStream.write_bit(out_bits);
 
             // append mUnderflow copies of opposite bit to stream
             out_bits = out_bits - 1; // 1 becomes all zeros; 0 rolls back to all 1's
@@ -54,7 +62,7 @@ void arithmetic_coder::encode(uint8_t symbol)
     }
 }
 
-void arithmetic_coder::encode(const uint8_t* data, std::size_t length)
+void arithmetic_encoder::encode(const uint8_t* data, std::size_t length)
 {
     for (std::size_t j = 0; j < length; j++)
     {
@@ -62,11 +70,11 @@ void arithmetic_coder::encode(const uint8_t* data, std::size_t length)
     }
 }
 
-void arithmetic_coder::flush()
+void arithmetic_encoder::flush()
 {
     mUnderflow += 1;
     uint64_t out_bits = mLow < 0x40000000 ? 0 : 1;
-    mOutStream.append(out_bits, 1);
+    mOutStream.write_bit(out_bits);
     out_bits = out_bits - 1; // 1 becomes all zeros; 0 rolls back to all 1's
     while (mUnderflow > 0)
     {

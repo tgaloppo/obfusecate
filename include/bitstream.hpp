@@ -1,3 +1,12 @@
+// ==============================================================================
+// ObFUSEcate
+// bitstream.hpp
+// 
+// Author: Travis J. Galoppo (tgaloppo@gmail.com)
+// Description: Bit-packed data stream reader/writer
+// 
+// SPDX-License-Identifier: MIT
+// ==============================================================================
 #pragma once
 
 #include <cstdint>
@@ -13,6 +22,10 @@ struct bit_t
 
 static constexpr bit_t ZERO_BIT = bit_t{0};
 static constexpr bit_t ONE_BIT  = bit_t{1};
+
+// shifting by >= bit size results in undefined behavior, so
+// we use a 2 step shift to allow n = 64...
+inline uint64_t safe_shift(uint64_t x, size_t n) { return (x << n / 2) << (n - n / 2); }
 
 class writer
 {
@@ -38,6 +51,20 @@ public:
 
     void    reset();
 
+    inline writer& write_bit(uint64_t bit)
+    {
+        if ((mPosition + 8) / 8 > mBuffer.size())
+        {
+            std::size_t new_size = std::max(std::size_t{64}, mBuffer.size() * 2);
+            mBuffer.resize(new_size);
+        }
+        std::size_t offset = mPosition / 8;
+        std::size_t shift  = mPosition % 8;
+        mBuffer[offset] |= static_cast<uint8_t>((bit & 1) << shift);
+        mPosition += 1;
+        return *this;
+    }
+
 private:
     std::vector<uint8_t> mBuffer;
     std::size_t          mPosition;
@@ -57,6 +84,19 @@ public:
     reader& operator>>(uint32_t& x);
     reader& operator>>(uint64_t& x);
     reader& extract(uint64_t& x, std::size_t n);
+
+    inline reader& read_bit(uint64_t& x)
+    {
+        x = 0;
+        if (mPosition + 1 <= mLength)
+        {
+            std::size_t offset = mPosition / 8;
+            std::size_t shift  = mPosition % 8;
+            x = (mData[offset] >> shift) & 1;
+            mPosition += 1;
+        }
+        return *this;
+    }
 
 private:
     const uint8_t*  mData;

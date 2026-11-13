@@ -1,3 +1,11 @@
+// ==============================================================================
+// ObFUSEcate
+// test_error_correction.cpp
+// 
+// Author: Travis J. Galoppo (tgaloppo@gmail.com)
+// 
+// SPDX-License-Identifier: MIT
+// ==============================================================================
 #include <gtest/gtest.h>
 #include <vector>
 #include <array>
