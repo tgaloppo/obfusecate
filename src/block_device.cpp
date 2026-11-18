@@ -164,7 +164,7 @@ block_device::block_device(const std::string& file_path, crypto::chacha20::Key& 
             mBAT[j] = bat_entry::deserialize(bat_data.data() + j * bat_entry::SERIALIZED_SIZE);
         }
     }
-};
+}
 
 block_device::~block_device()
 {

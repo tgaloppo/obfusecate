@@ -44,6 +44,7 @@ target_compile_options(compiler_flags INTERFACE
     -Woverloaded-virtual
     -Wnull-dereference
     -Wformat=2
+    -Wno-psabi
 
     # Configuration-specific optimization & debug flags
     $<$<CONFIG:Debug>:-O0 -g3 -fno-omit-frame-pointer>

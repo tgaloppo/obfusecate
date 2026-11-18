@@ -61,7 +61,7 @@ uint32_t symbol_frequency::get_lower(uint8_t symbol) const
 
 uint32_t symbol_frequency::get_upper(uint8_t symbol) const
 {
-    return mCumulative[symbol + 1];
+    return mCumulative[static_cast<std::size_t>(symbol) + 1];
 }
 
 uint32_t symbol_frequency::get_total() const

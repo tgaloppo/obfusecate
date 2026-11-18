@@ -37,7 +37,7 @@ void writer::reset()
 
 writer& writer::append(uint64_t x, std::size_t n)
 {
-    if ((mPosition + n + 7) / 8 > mBuffer.size())
+    if (mPosition + n > mBuffer.size() * 8)
     {
         std::size_t new_size = std::max(std::size_t{64}, mBuffer.size() * 2);
         mBuffer.resize(new_size);
@@ -67,7 +67,7 @@ writer& writer::append(uint64_t x, std::size_t n)
     return *this;
 }
 
-writer& writer::operator<<(const bit_t x)
+writer& writer::operator<<(bit_t x)
 {
     return append(static_cast<uint64_t>(x.bit), 1);
 }
@@ -107,7 +107,7 @@ reader& reader::extract(uint64_t& x, std::size_t n)
 
         // extract initial bits (may be partial)
         const uint8_t* buf = &mData[offset];
-        x = static_cast<uint64_t>( (*(buf++) >> shift) & (mask & 0xFF) );
+        x = (static_cast<uint64_t>( *(buf++) ) >> shift) & (mask & 0xFF);
 
         // extract remaining bits
         shift = 8 - shift; // shift now has # of bits already extracted
@@ -124,7 +124,6 @@ reader& reader::extract(uint64_t& x, std::size_t n)
 
     return *this;
 }
-
 
 reader& reader::operator>>(bit_t& x)
 {

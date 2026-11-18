@@ -38,7 +38,7 @@ static int device_getattr(const char* path, struct stat* stbuf, [[maybe_unused]]
         stbuf->st_mode    = S_IFREG | 0666;
         stbuf->st_nlink   = 1;
         stbuf->st_size    = static_cast<__off_t>(get_device()->get_logical_size());
-        stbuf->st_blksize = get_device()->get_logical_block_size();
+        stbuf->st_blksize = static_cast<__blksize_t>(get_device()->get_logical_block_size());
         return 0;
     }
 

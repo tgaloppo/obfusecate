@@ -136,13 +136,13 @@ TEST_F(CryptfsVolumeTest, KillSwitchTriggersOnTampering)
         char tampered_byte;
         raw_file.seekp(static_cast<long int>(sizeof(file_header) + offset)); // Offset into block 0's payload
         raw_file.read(&tampered_byte, 1);
-        tampered_byte = ~tampered_byte;
+        tampered_byte = static_cast<char>(~tampered_byte);
         raw_file.seekp(static_cast<long int>(sizeof(file_header) + offset)); // Offset into block 0's payload
         raw_file.write(&tampered_byte, 1);
 
         raw_file.seekp(static_cast<long int>(sizeof(file_header) + offset + 128)); // need to corrupt two shards
         raw_file.read(&tampered_byte, 1);
-        tampered_byte = ~tampered_byte;
+        tampered_byte = static_cast<char>(~tampered_byte);
         raw_file.seekp(static_cast<long int>(sizeof(file_header) + offset + 128)); // need to corrupt two shards
         raw_file.write(&tampered_byte, 1);
     }

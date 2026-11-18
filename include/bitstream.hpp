@@ -42,7 +42,7 @@ public:
     std::size_t size_in_bits() const;
     std::size_t size_in_bytes() const;
 
-    writer& operator<<(const bit_t x);
+    writer& operator<<(bit_t x);
     writer& operator<<(uint8_t x);
     writer& operator<<(uint16_t x);
     writer& operator<<(uint32_t x);
@@ -53,7 +53,7 @@ public:
 
     inline writer& write_bit(uint64_t bit)
     {
-        if ((mPosition + 8) / 8 > mBuffer.size())
+        if (mPosition >= mBuffer.size() * 8)
         {
             std::size_t new_size = std::max(std::size_t{64}, mBuffer.size() * 2);
             mBuffer.resize(new_size);
@@ -88,7 +88,7 @@ public:
     inline reader& read_bit(uint64_t& x)
     {
         x = 0;
-        if (mPosition + 1 <= mLength)
+        if (mPosition < mLength)
         {
             std::size_t offset = mPosition / 8;
             std::size_t shift  = mPosition % 8;

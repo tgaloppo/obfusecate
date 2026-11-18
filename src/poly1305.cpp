@@ -24,7 +24,7 @@ static bool constant_time_mac_compare(const std::array<uint8_t, 16>& a, const st
     uint8_t result = 0;
     for (std::size_t i = 0; i < 16; i++)
     {
-        result |= static_cast<uint8_t>(a[i] ^ b[i]);
+        result = static_cast<uint8_t>(result | (a[i] ^ b[i]));
     }
     return result == 0;
 }

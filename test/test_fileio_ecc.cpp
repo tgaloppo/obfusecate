@@ -156,7 +156,7 @@ TEST_F(CryptfsECCTest, HeaderTamperingBypassesECC)
         raw_file.seekp(static_cast<long int>(sizeof(file_header) + 20)); 
         char tampered_byte;
         raw_file.read(&tampered_byte, 1);
-        tampered_byte = ~tampered_byte;
+        tampered_byte = static_cast<char>(~tampered_byte);
         raw_file.seekp(static_cast<long int>(sizeof(file_header) + 20)); 
         raw_file.write(&tampered_byte, 1);
     }

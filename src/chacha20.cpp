@@ -151,7 +151,7 @@ void encrypt(uint8_t* data, std::size_t length, const Key& key, const Nonce& non
         std::size_t chunk_size = std::min<std::size_t>(64, length - j * 64);
         for (std::size_t k = 0; k < chunk_size; k++)
         {
-            data[j * 64 + k] ^= cipher_stream[k];
+            data[j * 64 + k] = static_cast<uint8_t>(data[j * 64 + k] ^ cipher_stream[k]);
         }
     }
 
